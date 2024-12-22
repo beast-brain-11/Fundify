@@ -1,0 +1,287 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "../components/button";
+import { Toaster } from "../components/toaster";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/card";
+import { useToast } from "../utils/use-toast";
+import { Navigation } from "../components/Navigation";
+import { VotingSystem } from "../components/VotingSystem";
+import { FeedbackDialog } from "../components/FeedbackDialog";
+import { useWalletStore } from "../utils/stores";
+import { checkNetwork, switchToSepolia } from "../utils/web3";
+import { Progress } from "../components/progress";
+import brain from "brain";
+import type { Project } from "../utils/types";
+
+// Loading skeleton component
+function ProjectSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <div className="w-full h-48 bg-muted animate-pulse" />
+      <CardHeader>
+        <div className="h-6 w-3/4 bg-muted animate-pulse rounded" />
+        <div className="h-4 w-full bg-muted animate-pulse rounded mt-2" />
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between text-sm mb-2">
+              <div className="h-4 w-1/4 bg-muted animate-pulse rounded" />
+              <div className="h-4 w-1/4 bg-muted animate-pulse rounded" />
+            </div>
+            <div className="h-2 w-full bg-muted animate-pulse rounded" />
+          </div>
+          <div className="flex justify-between">
+            <div className="h-4 w-1/4 bg-muted animate-pulse rounded" />
+            <div className="h-4 w-1/4 bg-muted animate-pulse rounded" />
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="flex gap-4">
+        <div className="h-10 w-full bg-muted animate-pulse rounded" />
+        <div className="h-10 w-10 bg-muted animate-pulse rounded" />
+      </CardFooter>
+    </Card>
+  );
+}
+
+export default function ExploreProjects() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const { address } = useWalletStore();
+
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await brain.list_projects();
+        const data = await response.json();
+        setProjects(data);
+      } catch (error) {
+        setError("Failed to load projects. Please try again.");
+        toast({
+          title: "Error",
+          description: "Failed to load projects. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchProjects();
+  }, [toast]);
+
+  const handleBackProject = async (projectId: number) => {
+    if (!window.ethereum) {
+      toast({
+        title: "Error",
+        description: "Please install MetaMask to back projects.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if we're on the correct network
+    const isCorrectNetwork = await checkNetwork();
+    if (!isCorrectNetwork) {
+      toast({
+        title: "Wrong Network",
+        description: "Switching to Sepolia testnet...",
+      });
+
+      const switched = await switchToSepolia();
+      if (!switched) {
+        toast({
+          title: "Error",
+          description: "Failed to switch network. Please switch to Sepolia testnet manually.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    if (!address) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await brain.back_project({ project_id: projectId, backer_address: address, amount: 0.1 });
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Project backed successfully!",
+        });
+        // Refresh projects to get updated data
+        const projectsResponse = await brain.list_projects();
+        const projectsData = await projectsResponse.json();
+        setProjects(projectsData);
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      let errorMessage = "Failed to back project. Please try again.";
+
+      if (error instanceof Error) {
+        if (error.message.includes("insufficient funds")) {
+          errorMessage = "Insufficient funds to back the project.";
+        } else if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction was cancelled.";
+        }
+      }
+
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="max-w-6xl mx-auto text-center">
+            <h1 className="text-3xl font-bold mb-4">Error</h1>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Navigation />
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold">Explore Projects</h1>
+              <p className="text-muted-foreground mt-2">
+                Discover and support innovative projects in our community
+              </p>
+            </div>
+            <Button onClick={() => navigate("/ProjectSubmission")}>
+              Create Project
+            </Button>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {isLoading ? (
+              <>
+                <ProjectSkeleton />
+                <ProjectSkeleton />
+                <ProjectSkeleton />
+              </>
+            ) : projects.length === 0 ? (
+              <div className="col-span-3 text-center py-12">
+                <h2 className="text-xl font-semibold mb-2">No Projects Found</h2>
+                <p className="text-muted-foreground">Be the first to create a project!</p>
+              </div>
+            ) : (
+              projects.map((project) => (
+                <Card
+                  key={project.id}
+                  className="overflow-hidden cursor-pointer"
+                  onClick={() => navigate(`/ProjectDetails?id=${project.id}`)}
+                >
+                  <img
+                    src={project.image || `https://picsum.photos/seed/${project.id}/800/400`}
+                    alt={project.name}
+                    className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = `https://picsum.photos/seed/${project.id}/800/400`;
+                    }}
+                  />
+                  <CardHeader>
+                    <CardTitle>{project.name}</CardTitle>
+                    <CardDescription className="line-clamp-2">
+                      {project.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span>
+                            {project.fundingGoal > 0
+                              ? ((project.currentFunding || 0) / project.fundingGoal * 100).toFixed(0)
+                              : "0"}% Funded
+                          </span>
+                          <span>{project.currentFunding || 0} ETH raised</span>
+                        </div>
+                        <Progress
+                          value={project.fundingGoal > 0
+                            ? ((project.currentFunding || 0) / project.fundingGoal * 100)
+                            : 0
+                          }
+                        />
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>{project.backers} Backers</span>
+                        <span>{project.daysLeft} Days Left</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex gap-4">
+                    <Button
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBackProject(project.id);
+                      }}
+                    >
+                      Back Project
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProject(project.id);
+                        setShowFeedback(true);
+                      }}
+                    >
+                      Give Feedback
+                    </Button>
+                  </CardFooter>
+                  <VotingSystem projectId={project.id} currentVotes={project.votes || 0} />
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+      </main>
+
+      {selectedProject !== null && (
+        <FeedbackDialog
+          open={showFeedback}
+          onOpenChange={(open) => {
+            setShowFeedback(open);
+            if (!open) setSelectedProject(null);
+          }}
+          projectId={selectedProject}
+        />
+      )}
+      <Toaster />
+    </div>
+  );
+}

@@ -1,0 +1,20 @@
+import { useState, useCallback } from 'react';
+
+interface ToastOptions {
+  title?: string;
+  description?: string;
+  variant?: 'default' | 'destructive';
+}
+
+export function useToast() {
+  const [toasts, setToasts] = useState<ToastOptions[]>([]);
+
+  const toast = useCallback((options: ToastOptions) => {
+    setToasts((current) => [...current, options]);
+    setTimeout(() => {
+      setToasts((current) => current.slice(1));
+    }, 3000);
+  }, []);
+
+  return { toast, toasts };
+}

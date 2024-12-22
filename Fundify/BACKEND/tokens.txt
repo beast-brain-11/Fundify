@@ -1,0 +1,115 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import databutton as db
+from datetime import datetime
+
+router = APIRouter()
+
+class TokenBalance(BaseModel):
+    address: str
+    balance: float
+
+class TokenTransaction(BaseModel):
+    from_address: str
+    to_address: str
+    amount: float
+    timestamp: str
+    transaction_type: str  # 'mint', 'transfer', 'burn'
+
+class TokenResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+
+@router.get("/balance/{address}")
+def get_balance(address: str) -> TokenBalance:
+    try:
+        balances = db.storage.json.get("token_balances", default={})
+        return TokenBalance(
+            address=address,
+            balance=balances.get(address, 0)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/mint")
+def mint_tokens(address: str, amount: float) -> TokenResponse:
+    try:
+        # Get current balances
+        balances = db.storage.json.get("token_balances", default={})
+        transactions = db.storage.json.get("token_transactions", default=[])
+        
+        # Update balance
+        balances[address] = balances.get(address, 0) + amount
+        
+        # Record transaction
+        transactions.append({
+            "from_address": "0x0",
+            "to_address": address,
+            "amount": amount,
+            "timestamp": datetime.now().isoformat(),
+            "transaction_type": "mint"
+        })
+        
+        # Save updates
+        db.storage.json.put("token_balances", balances)
+        db.storage.json.put("token_transactions", transactions)
+        
+        return TokenResponse(
+            success=True,
+            message=f"Minted {amount} tokens to {address}",
+            data={"new_balance": balances[address]}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/transfer")
+def transfer_tokens(from_address: str, to_address: str, amount: float) -> TokenResponse:
+    try:
+        # Get current balances
+        balances = db.storage.json.get("token_balances", default={})
+        transactions = db.storage.json.get("token_transactions", default=[])
+        
+        # Check balance
+        if balances.get(from_address, 0) < amount:
+            raise HTTPException(status_code=400, detail="Insufficient balance")
+        
+        # Update balances
+        balances[from_address] = balances.get(from_address, 0) - amount
+        balances[to_address] = balances.get(to_address, 0) + amount
+        
+        # Record transaction
+        transactions.append({
+            "from_address": from_address,
+            "to_address": to_address,
+            "amount": amount,
+            "timestamp": datetime.now().isoformat(),
+            "transaction_type": "transfer"
+        })
+        
+        # Save updates
+        db.storage.json.put("token_balances", balances)
+        db.storage.json.put("token_transactions", transactions)
+        
+        return TokenResponse(
+            success=True,
+            message=f"Transferred {amount} tokens from {from_address} to {to_address}",
+            data={
+                "from_balance": balances[from_address],
+                "to_balance": balances[to_address]
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/transactions/{address}")
+def get_transactions(address: str) -> List[TokenTransaction]:
+    try:
+        transactions = db.storage.json.get("token_transactions", default=[])
+        return [
+            tx for tx in transactions
+            if tx["from_address"] == address or tx["to_address"] == address
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,0 +1,178 @@
+import { Button } from "./button";
+import { Toaster } from "./toaster";
+import { useWalletStore } from "../utils/stores";
+import { getWeb3 } from "../utils/web3";
+import { PROJECT_CONTRACT_ABI, PROJECT_CONTRACT_ADDRESS } from "../utils/contracts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogOverlay, DialogPortal } from "./dialog";
+import { Label } from "./label";
+import { RadioGroup, RadioGroupItem } from "./radio-group";
+import { Separator } from "./separator";
+import { Textarea } from "./textarea";
+import { useToast } from "../utils/use-toast";
+import brain from "brain";
+import { useState } from "react";
+
+interface FeedbackDialogProps {
+  projectId: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function FeedbackDialog({ projectId, open, onOpenChange }: FeedbackDialogProps) {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState({
+    innovation_rating: "neutral",
+    backing_intention: "maybe",
+    suggestions: "",
+    risks: ""
+  });
+
+  const { address } = useWalletStore();
+
+  const handleFeedbackSubmit = async () => {
+    if (!address) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const response = await brain.submit_feedback({
+        ...feedbackForm,
+        project_id: projectId
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Thank you for your feedback!",
+        });
+        // Reset form and close dialog
+        setFeedbackForm({
+          innovation_rating: "neutral",
+          backing_intention: "maybe",
+          suggestions: "",
+          risks: ""
+        });
+        onOpenChange(false);
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to submit feedback. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPortal>
+        <DialogOverlay className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+      <DialogContent className="sm:max-w-[425px] overflow-y-auto max-h-[90vh] fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+        <DialogHeader>
+          <DialogTitle>Provide Feedback</DialogTitle>
+          <DialogDescription>
+            Help improve this project by providing your feedback and suggestions
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <Label>How innovative is this project?</Label>
+            <RadioGroup
+              value={feedbackForm.innovation_rating}
+              onValueChange={(value) =>
+                setFeedbackForm({ ...feedbackForm, innovation_rating: value })
+              }
+              className="flex space-x-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="low" id="innovation-low" />
+                <Label htmlFor="innovation-low">Low</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="neutral" id="innovation-neutral" />
+                <Label htmlFor="innovation-neutral">Neutral</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="high" id="innovation-high" />
+                <Label htmlFor="innovation-high">High</Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <div className="space-y-4">
+            <Label>Would you consider backing this project?</Label>
+            <RadioGroup
+              value={feedbackForm.backing_intention}
+              onValueChange={(value) =>
+                setFeedbackForm({ ...feedbackForm, backing_intention: value })
+              }
+              className="flex space-x-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="no" id="backing-no" />
+                <Label htmlFor="backing-no">No</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="maybe" id="backing-maybe" />
+                <Label htmlFor="backing-maybe">Maybe</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="yes" id="backing-yes" />
+                <Label htmlFor="backing-yes">Yes</Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <Label htmlFor="suggestions">Suggestions for Improvement</Label>
+            <Textarea
+              id="suggestions"
+              placeholder="Share your ideas on how this project could be improved"
+              className="min-h-[100px]"
+              value={feedbackForm.suggestions}
+              onChange={(e) =>
+                setFeedbackForm({ ...feedbackForm, suggestions: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="risks">Potential Risks</Label>
+            <Textarea
+              id="risks"
+              placeholder="What potential risks or challenges do you see?"
+              className="min-h-[100px]"
+              value={feedbackForm.risks}
+              onChange={(e) =>
+                setFeedbackForm({ ...feedbackForm, risks: e.target.value })
+              }
+            />
+          </div>
+
+          <Button
+            className="w-full"
+            onClick={handleFeedbackSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Submitting..." : "Submit Feedback"}
+          </Button>
+        </div>
+      </DialogContent>
+      </DialogPortal>
+    </Dialog>
+  );
+}

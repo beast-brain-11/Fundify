@@ -1,0 +1,43 @@
+from fastapi import APIRouter
+from pydantic import BaseModel
+import databutton as db
+import json
+from datetime import datetime
+
+router = APIRouter()
+
+class ProjectFeedback(BaseModel):
+    innovation_rating: str  # 'low', 'neutral', 'high'
+    backing_intention: str  # 'no', 'maybe', 'yes'
+    suggestions: str
+    risks: str
+
+class FeedbackResponse(BaseModel):
+    success: bool
+    message: str
+
+@router.post("/submit-feedback")
+def submit_feedback(feedback: ProjectFeedback) -> FeedbackResponse:
+    try:
+        # Create feedback entry with timestamp
+        feedback_entry = {
+            **feedback.model_dump(),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Get existing feedback or create new list
+        try:
+            feedback_list = db.storage.json.get("project_feedback")
+        except:
+            feedback_list = []
+        
+        # Add new feedback
+        feedback_list.append(feedback_entry)
+        
+        # Store updated feedback list
+        db.storage.json.put("project_feedback", feedback_list)
+        
+        return FeedbackResponse(success=True, message="Feedback submitted successfully")
+    except Exception as e:
+        print(f"Error submitting feedback: {str(e)}")
+        return FeedbackResponse(success=False, message="Failed to submit feedback")

@@ -1,0 +1,215 @@
+import { Button } from "./button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
+import { Input } from "./input";
+import { Label } from "./label";
+import { Textarea } from "./textarea";
+import { useToast } from "../utils/use-toast";
+import { useState } from "react";
+import { useWalletStore } from "../utils/stores";
+import { getWeb3, checkNetwork, switchToSepolia, getPublicClient } from "../utils/web3";
+import { PROJECT_CONTRACT_ABI, PROJECT_CONTRACT_ADDRESS } from "../utils/contracts";
+import { parseEther } from "viem";
+
+export function ProjectSubmission() {
+  const { address } = useWalletStore(); // Check wallet connection
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    fundingGoal: "",
+    githubUrl: "",
+    websiteUrl: "",
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!address) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first.",
+        variant: "destructive",
+      });
+      console.error("No wallet address detected.");
+      return;
+    }
+
+    try {
+      // Check if we're on the correct network
+      const isCorrectNetwork = await checkNetwork();
+      if (!isCorrectNetwork) {
+        toast({
+          title: "Wrong Network",
+          description: "Switching to Sepolia testnet...",
+        });
+        
+        const switched = await switchToSepolia();
+        if (!switched) {
+          toast({
+            title: "Error",
+            description: "Failed to switch network. Please switch to Sepolia testnet manually.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      console.log("Submitting project...");
+      console.log("Form Data:", formData);
+
+      setIsSubmitting(true);
+      const walletClient = await getWeb3();
+      const publicClient = getPublicClient();
+      
+      // Prepare the contract parameters
+      const { request } = await publicClient.simulateContract({
+        address: PROJECT_CONTRACT_ADDRESS,
+        abi: PROJECT_CONTRACT_ABI,
+        functionName: 'createProject',
+        args: [formData.name, formData.description, parseEther(formData.fundingGoal)],
+        account: address,
+      });
+
+      // Send the transaction
+      const hash = await walletClient.writeContract(request);
+      console.log("Web3 client created:", client);
+      console.log("Contract address:", PROJECT_CONTRACT_ADDRESS);
+      console.log("Wallet address:", address);
+      console.log("Funding goal:", formData.fundingGoal);
+
+      // Ensure we're using a valid funding goal
+      const fundingGoalEth = parseFloat(formData.fundingGoal);
+      if (isNaN(fundingGoalEth) || fundingGoalEth <= 0) {
+        throw new Error("Please enter a valid funding goal");
+      }
+
+      await client.writeContract({
+        address: PROJECT_CONTRACT_ADDRESS,
+        abi: PROJECT_CONTRACT_ABI,
+        functionName: 'createProject',
+        args: [formData.name, formData.description, parseEther(formData.fundingGoal)],
+        account: address,
+      });
+
+
+
+      toast({
+        title: "Success",
+        description: "Project submitted successfully!",
+      });
+
+      console.log("Project submitted successfully.");
+      // Reset form
+      setFormData({
+        name: "",
+        description: "",
+        fundingGoal: "",
+        githubUrl: "",
+        websiteUrl: "",
+      });
+    } catch (error) {
+      let errorMessage = "Failed to submit project. Please try again.";
+      
+      if (error.message.includes("User rejected the request")) {
+        errorMessage = "Transaction was rejected. Please try again.";
+      } else if (error.message.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds to complete the transaction.";
+      } else if (error.message.includes("Internal error")) {
+        errorMessage = "Network error. Please make sure you're connected to Sepolia testnet.";
+      }
+
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      console.error("Submission Error:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Card className="max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle>Submit Your Project</CardTitle>
+        <CardDescription>
+          Share your innovative idea with the community and get funded.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="name">Project Name</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              className="min-h-[150px]"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="fundingGoal">Funding Goal (ETH)</Label>
+            <Input
+              id="fundingGoal"
+              type="number"
+              step="0.01"
+              value={formData.fundingGoal}
+              onChange={(e) =>
+                setFormData({ ...formData, fundingGoal: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="githubUrl">GitHub Repository URL</Label>
+            <Input
+              id="githubUrl"
+              type="url"
+              value={formData.githubUrl}
+              onChange={(e) =>
+                setFormData({ ...formData, githubUrl: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="websiteUrl">Website URL</Label>
+            <Input
+              id="websiteUrl"
+              type="url"
+              value={formData.websiteUrl}
+              onChange={(e) =>
+                setFormData({ ...formData, websiteUrl: e.target.value })
+              }
+            />
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={isSubmitting || !address}
+          >
+            {isSubmitting ? "Submitting..." : "Submit Project"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}

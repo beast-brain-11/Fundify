@@ -1,0 +1,124 @@
+import { Button } from "./button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
+import { useToast } from "../utils/use-toast";
+import { useState } from "react";
+import { useWalletStore } from "../utils/stores";
+import brain from "brain";
+import { checkNetwork, switchToSepolia } from "../utils/web3";
+import { Vote } from "../utils/types";
+
+interface VotingSystemProps {
+  projectId: number;
+  currentVotes: number;
+}
+
+export function VotingSystem({ projectId, currentVotes }: VotingSystemProps) {
+  const { address } = useWalletStore();
+  const { toast } = useToast();
+  const [isVoting, setIsVoting] = useState(false);
+  const [votes, setVotes] = useState(currentVotes || 0);
+
+  const handleVote = async (voteValue: number) => {
+    if (!address) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Check if we're on the correct network
+      const isCorrectNetwork = await checkNetwork();
+      if (!isCorrectNetwork) {
+        toast({
+          title: "Wrong Network",
+          description: "Switching to Sepolia testnet...",
+        });
+        
+        const switched = await switchToSepolia();
+        if (!switched) {
+          toast({
+            title: "Error",
+            description: "Failed to switch network. Please switch to Sepolia testnet manually.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      setIsVoting(true);
+      const vote: Vote = {
+        projectId,
+        voter: address,
+        vote: voteValue,
+        timestamp: Date.now(),
+      };
+
+      const response = await brain.submit_vote(vote);
+      const result = await response.json();
+
+      if (result.success) {
+        setVotes(result.total_votes);
+        toast({
+          title: "Success",
+          description: "Vote submitted successfully!",
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      let errorMessage = "Failed to submit vote. Please try again.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("already voted")) {
+          errorMessage = "You have already voted on this project.";
+        } else if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction was cancelled.";
+        }
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Project Voting</CardTitle>
+        <CardDescription>Support this project with your vote</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <span>Total Votes: {votes}</span>
+          </div>
+          <div className="flex gap-4">
+            <Button
+              onClick={() => handleVote(1)}
+              disabled={isVoting}
+              className="flex-1"
+            >
+              👍 Support
+            </Button>
+            <Button
+              onClick={() => handleVote(-1)}
+              disabled={isVoting}
+              variant="outline"
+              className="flex-1"
+            >
+              👎 Oppose
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

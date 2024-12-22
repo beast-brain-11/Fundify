@@ -1,0 +1,53 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List
+import databutton as db
+
+router = APIRouter()
+
+class Vote(BaseModel):
+    project_id: int
+    voter: str
+    vote: int
+
+class VoteResponse(BaseModel):
+    success: bool
+    message: str
+    total_votes: int
+
+@router.post("/vote")
+def submit_vote(vote: Vote) -> VoteResponse:
+    try:
+        # Get existing votes
+        votes = db.storage.json.get(f"votes_{vote.project_id}", default=[])
+        
+        # Check if user already voted
+        if any(v["voter"] == vote.voter for v in votes):
+            raise HTTPException(status_code=400, detail="Already voted")
+        
+        # Add new vote
+        votes.append({
+            "voter": vote.voter,
+            "vote": vote.vote,
+            "timestamp": db.storage.time.now()
+        })
+        
+        # Save votes
+        db.storage.json.put(f"votes_{vote.project_id}", votes)
+        
+        return VoteResponse(
+            success=True,
+            message="Vote submitted successfully",
+            total_votes=len(votes)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/votes/{project_id}")
+def get_votes(project_id: int) -> List[Vote]:
+    try:
+        votes = db.storage.json.get(f"votes_{project_id}", default=[])
+        return votes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

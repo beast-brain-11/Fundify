@@ -1,0 +1,98 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import databutton as db
+import requests
+
+router = APIRouter()
+
+class GitHubRepo(BaseModel):
+    name: str
+    full_name: str
+    description: Optional[str]
+    html_url: str
+    stargazers_count: int
+    forks_count: int
+    open_issues_count: int
+    updated_at: str
+
+class GitHubCommit(BaseModel):
+    sha: str
+    message: str
+    author: str
+    date: str
+    url: str
+
+class GitHubResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+
+@router.get("/repo/{owner}/{repo}")
+def get_repo_info(owner: str, repo: str) -> GitHubRepo:
+    try:
+        # Get GitHub token
+        github_token = db.secrets.get("GITHUB_TOKEN")
+        
+        # Make GitHub API request
+        headers = {"Authorization": f"token {github_token}"}
+        response = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Failed to fetch repository information"
+            )
+            
+        repo_data = response.json()
+        
+        return GitHubRepo(
+            name=repo_data["name"],
+            full_name=repo_data["full_name"],
+            description=repo_data["description"],
+            html_url=repo_data["html_url"],
+            stargazers_count=repo_data["stargazers_count"],
+            forks_count=repo_data["forks_count"],
+            open_issues_count=repo_data["open_issues_count"],
+            updated_at=repo_data["updated_at"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/commits/{owner}/{repo}")
+def get_recent_commits(owner: str, repo: str, limit: int = 10) -> List[GitHubCommit]:
+    try:
+        # Get GitHub token
+        github_token = db.secrets.get("GITHUB_TOKEN")
+        
+        # Make GitHub API request
+        headers = {"Authorization": f"token {github_token}"}
+        response = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}/commits",
+            headers=headers,
+            params={"per_page": limit}
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Failed to fetch commit information"
+            )
+            
+        commits_data = response.json()
+        
+        return [
+            GitHubCommit(
+                sha=commit["sha"],
+                message=commit["commit"]["message"],
+                author=commit["commit"]["author"]["name"],
+                date=commit["commit"]["author"]["date"],
+                url=commit["html_url"]
+            )
+            for commit in commits_data
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

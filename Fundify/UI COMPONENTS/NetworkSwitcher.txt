@@ -1,0 +1,76 @@
+import { Button } from "./button";
+import { useToast } from "../utils/use-toast";
+import { sepolia } from "viem/chains";
+
+export function NetworkSwitcher() {
+  const { toast } = useToast();
+
+  const switchToSepolia = async () => {
+    if (!window.ethereum) {
+      toast({
+        title: "Error",
+        description: "Please install MetaMask to use this feature.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: `0x${sepolia.id.toString(16)}` }],
+      });
+
+      toast({
+        title: "Success",
+        description: "Successfully switched to Sepolia network.",
+      });
+    } catch (error: any) {
+      if (error.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: `0x${sepolia.id.toString(16)}`,
+                chainName: "Sepolia",
+                nativeCurrency: {
+                  name: "Sepolia Ether",
+                  symbol: "ETH",
+                  decimals: 18,
+                },
+                rpcUrls: ["https://rpc.sepolia.org"],
+                blockExplorerUrls: ["https://sepolia.etherscan.io"],
+              },
+            ],
+          });
+          toast({
+            title: "Success",
+            description: "Successfully added and switched to Sepolia network.",
+          });
+        } catch (addError) {
+          toast({
+            title: "Error",
+            description: "Failed to add Sepolia network. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to switch network. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      onClick={switchToSepolia}
+    >
+      Switch to Sepolia
+    </Button>
+  );
+}

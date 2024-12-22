@@ -1,0 +1,260 @@
+import { Button } from "../components/button";
+import { Navigation } from "../components/Navigation";
+import { useWalletStore } from "../utils/stores";
+import { getWeb3 } from "../utils/web3";
+import { PROJECT_CONTRACT_ABI, PROJECT_CONTRACT_ADDRESS } from "../utils/contracts";
+import { VotingSystem } from "../components/VotingSystem";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/card";
+import { Progress } from "../components/progress";
+import { Separator } from "../components/separator";
+import { RocketIcon, HeartIcon, GitHubLogoIcon, GlobeIcon } from "@radix-ui/react-icons";
+import { useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { FeedbackDialog } from "../components/FeedbackDialog";
+import { useToast } from "../utils/use-toast";
+import { Toaster } from "../components/toaster";
+
+// Mock project data - In a real app, this would come from an API
+const mockProject = {
+  id: 1,
+  name: "Decentralized Energy Grid",
+  description: `A blockchain-based platform for peer-to-peer energy trading in local communities. This innovative project aims to revolutionize how we share and trade renewable energy, creating a more sustainable and efficient energy ecosystem.
+
+The platform enables homeowners with solar panels to sell excess energy directly to their neighbors, cutting out traditional intermediaries and reducing costs for everyone involved. Smart contracts ensure transparent and automatic settlements, while our unique reputation system promotes reliable energy trading partnerships.`,
+  fundingGoal: 100,
+  currentFunding: 65,
+  backers: 128,
+  daysLeft: 15,
+  creator: "Energy DAO",
+  creatorProfile: "https://github.com/energydao",
+  website: "https://energydao.xyz",
+  image: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?q=80&w=1200&auto=format&fit=crop",
+  updates: [
+    {
+      date: "2024-01-15",
+      title: "Partnership Announcement",
+      content: "We're excited to announce our partnership with SolarTech Inc. for hardware integration."
+    },
+    {
+      date: "2024-01-10",
+      title: "Development Update",
+      content: "Smart contract audit completed successfully. Moving to beta testing phase."
+    }
+  ],
+  milestones: [
+    {
+      title: "Smart Contract Development",
+      status: "completed",
+      target: "Q1 2024"
+    },
+    {
+      title: "Beta Testing",
+      status: "in-progress",
+      target: "Q2 2024"
+    },
+    {
+      title: "Public Launch",
+      status: "pending",
+      target: "Q3 2024"
+    }
+  ]
+};
+
+export default function ProjectDetails() {
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("id");
+  const { toast } = useToast();
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  const { address } = useWalletStore();
+
+  const handleBackProject = async () => {
+    if (!address) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const web3 = getWeb3();
+      const contract = new web3.eth.Contract(PROJECT_CONTRACT_ABI, PROJECT_CONTRACT_ADDRESS);
+
+      await contract.methods
+        .backProject(Number(projectId))
+        .send({ from: address, value: web3.utils.toWei("0.1", "ether") });
+
+      toast({
+        title: "Success",
+        description: "Project backed successfully!",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to back project. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Navigation />
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Project Header */}
+          <div className="space-y-6">
+            <img
+              src={mockProject.image}
+              alt={mockProject.name}
+              className="w-full h-[300px] object-cover rounded-lg"
+            />
+            
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-3xl font-bold">{mockProject.name}</h1>
+                <div className="flex items-center gap-4 mt-2 text-muted-foreground">
+                  <span>by {mockProject.creator}</span>
+                  <div className="flex gap-2">
+                    <a
+                      href={mockProject.creatorProfile}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-primary"
+                    >
+                      <GitHubLogoIcon className="h-5 w-5" />
+                    </a>
+                    <a
+                      href={mockProject.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-primary"
+                    >
+                      <GlobeIcon className="h-5 w-5" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="lg"
+                  onClick={handleBackProject}
+                >
+                  Back Project
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowFeedback(true)}
+                >
+                  <HeartIcon className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Funding Progress */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span>{(mockProject.currentFunding / mockProject.fundingGoal * 100).toFixed(0)}% Funded</span>
+                      <span>{mockProject.currentFunding} ETH raised of {mockProject.fundingGoal} ETH goal</span>
+                    </div>
+                    <Progress value={mockProject.currentFunding / mockProject.fundingGoal * 100} />
+                  </div>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>{mockProject.backers} Backers</span>
+                    <span>{mockProject.daysLeft} Days Left</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 mt-8">
+            {/* Project Description */}
+            <div className="md:col-span-2 space-y-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle>About</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="prose dark:prose-invert">
+                    {mockProject.description.split('\n\n').map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Project Updates */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Updates</CardTitle>
+                  <CardDescription>Latest project developments and announcements</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {mockProject.updates.map((update, index) => (
+                      <div key={index} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-semibold">{update.title}</h3>
+                          <span className="text-sm text-muted-foreground">{update.date}</span>
+                        </div>
+                        <p className="text-muted-foreground">{update.content}</p>
+                        {index < mockProject.updates.length - 1 && <Separator className="mt-4" />}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Project Milestones */}
+            <div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Milestones</CardTitle>
+                  <CardDescription>Project roadmap and progress</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {mockProject.milestones.map((milestone, index) => (
+                      <div key={index} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-semibold">{milestone.title}</h3>
+                          <span className="text-sm text-muted-foreground">{milestone.target}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`h-2 w-2 rounded-full ${milestone.status === 'completed' ? 'bg-green-500' : milestone.status === 'in-progress' ? 'bg-yellow-500' : 'bg-gray-300'}`}
+                          />
+                          <span className="text-sm text-muted-foreground capitalize">{milestone.status}</span>
+                        </div>
+                        {index < mockProject.milestones.length - 1 && <Separator className="mt-4" />}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {projectId && (
+        <FeedbackDialog
+          projectId={Number(projectId)}
+          open={showFeedback}
+          onOpenChange={setShowFeedback}
+        />
+      )}
+      <Toaster />
+    </div>
+  );
+}

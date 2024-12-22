@@ -1,0 +1,111 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import databutton as db
+from datetime import datetime, timedelta
+
+router = APIRouter()
+
+class ProjectMetrics(BaseModel):
+    project_id: int
+    total_funding: float
+    total_backers: int
+    avg_contribution: float
+    funding_rate: float  # ETH per day
+    milestone_completion_rate: float  # Percentage
+    community_engagement: float  # Based on votes and feedback
+
+class TimeSeriesMetric(BaseModel):
+    timestamp: str
+    value: float
+
+class MetricsResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+
+def calculate_community_engagement(project_id: int) -> float:
+    try:
+        # Get votes
+        votes = db.storage.json.get(f"votes_{project_id}", default=[])
+        total_votes = len(votes)
+        
+        # Get feedback
+        feedback_list = db.storage.json.get("project_feedback", default=[])
+        project_feedback = [f for f in feedback_list if f.get("project_id") == project_id]
+        total_feedback = len(project_feedback)
+        
+        # Calculate engagement score (0-100)
+        engagement_score = min((total_votes + total_feedback * 2) / 10 * 100, 100)
+        
+        return engagement_score
+    except Exception:
+        return 0
+
+@router.get("/project/{project_id}")
+def get_project_metrics(project_id: int) -> ProjectMetrics:
+    try:
+        # Get project data
+        projects = db.storage.json.get("projects", default=[])
+        project = next((p for p in projects if p["id"] == project_id), None)
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Calculate metrics
+        total_funding = project["current_funding"]
+        total_backers = len(project["backers"])
+        avg_contribution = total_funding / total_backers if total_backers > 0 else 0
+        
+        # Calculate funding rate
+        created_at = datetime.fromisoformat(project["created_at"])
+        days_active = (datetime.now() - created_at).days or 1
+        funding_rate = total_funding / days_active
+        
+        # Calculate milestone completion
+        completed_milestones = sum(1 for m in project["milestones"] if m["status"] == "completed")
+        total_milestones = len(project["milestones"]) or 1
+        milestone_completion_rate = (completed_milestones / total_milestones) * 100
+        
+        # Get community engagement
+        community_engagement = calculate_community_engagement(project_id)
+        
+        return ProjectMetrics(
+            project_id=project_id,
+            total_funding=total_funding,
+            total_backers=total_backers,
+            avg_contribution=avg_contribution,
+            funding_rate=funding_rate,
+            milestone_completion_rate=milestone_completion_rate,
+            community_engagement=community_engagement
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/funding-history/{project_id}")
+def get_funding_history(project_id: int, days: int = 30) -> List[TimeSeriesMetric]:
+    try:
+        # Get project transactions
+        transactions = db.storage.json.get(f"project_transactions_{project_id}", default=[])
+        
+        # Calculate daily funding
+        start_date = datetime.now() - timedelta(days=days)
+        daily_funding = {}
+        
+        for tx in transactions:
+            tx_date = datetime.fromisoformat(tx["timestamp"]).date()
+            if tx_date >= start_date.date():
+                daily_funding[tx_date] = daily_funding.get(tx_date, 0) + tx["amount"]
+        
+        # Convert to time series
+        metrics = [
+            TimeSeriesMetric(
+                timestamp=date.isoformat(),
+                value=amount
+            )
+            for date, amount in sorted(daily_funding.items())
+        ]
+        
+        return metrics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

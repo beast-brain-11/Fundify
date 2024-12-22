@@ -1,0 +1,52 @@
+import { RocketIcon, PersonIcon } from "@radix-ui/react-icons";
+import { Button } from "./button";
+import { useWalletStore } from "../utils/stores";
+import { formatAddress } from "../utils/web3";
+import { Link } from "react-router-dom";
+import { NetworkSwitcher } from "./NetworkSwitcher";
+
+export function Navigation() {
+  const { address, connect, disconnect, isConnecting } = useWalletStore();
+
+  return (
+    <nav className="border-b border-border/40 backdrop-blur-sm">
+      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+        <Link to="/" className="flex items-center gap-2">
+          <RocketIcon className="h-6 w-6 text-primary" />
+          <span className="text-xl font-bold tracking-wider">Fundify</span>
+        </Link>
+
+        <div className="flex items-center gap-4">
+          <Link to="/ExploreProjects">
+            <Button variant="ghost">Explore</Button>
+          </Link>
+          <Link to="/ProjectSubmission">
+            <Button variant="ghost">Submit Project</Button>
+          </Link>
+          {address ? (
+            <>
+              <NetworkSwitcher />
+              <Button
+                variant="outline"
+                onClick={disconnect}
+                className="flex items-center gap-2"
+              >
+                <PersonIcon className="h-4 w-4" />
+                {formatAddress(address)}
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={connect}
+              disabled={isConnecting}
+              className="flex items-center gap-2"
+            >
+              <PersonIcon className="h-4 w-4" />
+              {isConnecting ? "Connecting..." : "Connect Wallet"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}

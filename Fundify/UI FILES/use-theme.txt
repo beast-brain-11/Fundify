@@ -1,0 +1,33 @@
+import { useState, useEffect } from 'react';
+
+type Theme = 'dark' | 'light' | 'system';
+
+export function useTheme() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    // Check if theme was previously set
+    const savedTheme = localStorage.getItem('theme') as Theme;
+    return savedTheme || 'system';
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+
+    // Remove old theme class
+    root.classList.remove('light', 'dark');
+
+    // Add new theme class
+    if (theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.add(theme);
+    }
+
+    // Save theme preference
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  return { theme, setTheme };
+}

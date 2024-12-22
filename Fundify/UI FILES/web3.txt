@@ -1,0 +1,90 @@
+import { createWalletClient, createPublicClient, http, custom } from 'viem';
+import { sepolia } from 'viem/chains';
+
+declare global {
+  interface Window {
+    ethereum: any;
+  }
+}
+
+export const FUNDIFY_PROJECT_ID = 'e7deaddf167a85dbb22842b11acefae7';
+
+export const switchToSepolia = async () => {
+  if (!window.ethereum) {
+    throw new Error('MetaMask not installed');
+  }
+
+  try {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: `0x${sepolia.id.toString(16)}` }],
+    });
+    return true;
+  } catch (error: any) {
+    if (error.code === 4902) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: `0x${sepolia.id.toString(16)}`,
+              chainName: 'Sepolia',
+              nativeCurrency: {
+                name: 'Sepolia Ether',
+                symbol: 'ETH',
+                decimals: 18,
+              },
+              rpcUrls: ['https://rpc.sepolia.org'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io'],
+            },
+          ],
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+};
+
+export const checkNetwork = async () => {
+  if (!window.ethereum) {
+    throw new Error('MetaMask not installed');
+  }
+
+  const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+  return chainId === `0x${sepolia.id.toString(16)}`;
+};
+
+export const getPublicClient = () => {
+  return createPublicClient({
+    chain: sepolia,
+    transport: http()
+  });
+};
+
+export const getWeb3 = async () => {
+  if (!window.ethereum) {
+    throw new Error('MetaMask not installed');
+  }
+  
+  return createWalletClient({
+    chain: sepolia,
+    transport: custom(window.ethereum)
+  });
+};
+
+export const formatAddress = (address: string) => {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+};
+
+export const formatEther = (wei: string) => {
+  const value = parseInt(wei) / 1e18;
+  return value.toFixed(4);
+};
+
+export const toWei = (ether: string) => {
+  const value = parseFloat(ether) * 1e18;
+  return value.toString();
+};
